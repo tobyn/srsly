@@ -8,26 +8,35 @@ var slice = Array.prototype.slice;
 module.exports = exports = factory;
 
 function factory(options) {
-  var format = options.format || "node";
+  var style  = options.style  || "node",
+      input  = options.input  || style,
+      output = options.output || style;
 
-  if (format === "node") {
-    return partial(srsly,options.delay);
-  } else if (typeof format === "function") {
-    return partial(promiseAdapter,format,options.delay);
-  } else {
+  if (output === "promise" && typeof Promise === "undefined") {
+    var opt = options.output ? "output" : "style";
     throw new Error(
-      "Invalid format (must be 'node' or ES6-compliant Promise " +
-      "constructor): " + format
-    );
+      "This JS implementation lacks native promises. In order to " +
+      "generate promise output, pass an ES6-compliant promise constructor " +
+      "(Bluebird is a good choice) as the '" + opt + "' option.");
   }
+
+  var fn;
+  if (input === "promise" || typeof input === "function")
+    fn = partial(promiseInputAdapter,options.delay);
+  else
+    fn = partial(srsly,options.delay);
+
+  if (typeof output === "function")
+    return nodeToPromise(fn,output);
+  else
+    return fn;
 }
 
-function promiseAdapter(Promise, getDelay, fn) {
-  var args = slice.call(arguments,3),
-      wrapped = nodeToPromise(Promise,srsly);
+function promiseInputAdapter(getDelay, fn) {
+  var args = slice.call(arguments,2);
   args.unshift(promiseToNode(fn));
   args.unshift(getDelay);
-  return wrapped.apply(null,args);
+  return srsly.apply(null,args);
 }
 
 
@@ -99,7 +108,7 @@ function promiseToNode(fn) {
 
 exports.nodeToPromise = nodeToPromise;
 
-function nodeToPromise(Promise, fn) {
+function nodeToPromise(fn, Promise) {
   return function() {
     var args = slice.call(arguments);
 
@@ -117,6 +126,18 @@ function nodeToPromise(Promise, fn) {
         reject(e);
       }
     });
+  };
+}
+
+
+exports.max = max;
+
+function max(n, realDelay) {
+  return function(tries, err) {
+    if (tries >= n)
+      throw err;
+    else
+      return realDelay(tries,err);
   };
 }
 

@@ -9,7 +9,7 @@ var assert = require("assert"),
 describe("Handling successful results",function() {
   it("should resolve returned promises",function() {
     var retry = srsly({
-      format: Promise,
+      style: Promise,
       delay: srsly.noDelay
     });
 
@@ -22,7 +22,7 @@ describe("Handling successful results",function() {
 
   it("should call callbacks with null error and the result",function(done) {
     var retry = srsly({
-      format: "node",
+      style: "node",
       delay: srsly.noDelay
     });
 
@@ -42,17 +42,70 @@ describe("Handling successful results",function() {
 
 describe("Adapting node functions to return promises",function() {
   it("should resolve returned promises using callback results",function() {
+    var retry = srsly({
+      output: Promise,
+      delay: srsly.noDelay
+    });
+
+    return retry(function(arg, callback) {
+      callback(null,arg.toUpperCase());
+    },"success!").then(function(result) {
+      assert.equal(result,"SUCCESS!");
+    });
   });
 
   it("should reject returned promises using callback errors",function() {
+    var retry = srsly({
+      output: Promise,
+      delay: srsly.max(1,srsly.noDelay)
+    });
+
+    return retry(function(arg, callback) {
+      callback("failure :(");
+    },"success!").then(function() {
+      assert.fail();
+    },function(err) {
+      assert.equal(err,"failure :(");
+    });
   });
 });
 
 describe("Adapting promise functions to accept node callbacks",function() {
-  it("should pass results",function() {
+  it("should pass results to callbacks",function(done) {
+    var retry = srsly({
+      input: "promise",
+      delay: srsly.max(1,srsly.noDelay)
+    });
+
+    retry(function(arg) {
+      return Promise.resolve(arg.toUpperCase());
+    },"success!",function(err, result) {
+      try {
+        assert.strictEqual(err,null);
+        assert.equal(result,"SUCCESS!");
+        done();
+      } catch (e) {
+        done(e);
+      }
+    });
   });
 
-  it("should pass rejections as errors",function() {
+  it("should pass rejections to callbacks as errors",function(done) {
+    var retry = srsly({
+      input: "promise",
+      delay: srsly.max(1,srsly.noDelay)
+    });
+
+    retry(function(arg) {
+      return Promise.reject("failure :(");
+    },"success!",function(err) {
+      try {
+        assert.equal(err,"failure :(");
+        done();
+      } catch (e) {
+        done(e);
+      }
+    });
   });
 });
 
