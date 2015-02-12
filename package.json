@@ -1,0 +1,16 @@
+{
+  "name": "srsly",
+  "version": "1.0.0",
+  "description": "Yet another async function retry",
+  "main": "srsly.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "author": "Tobyn Baugher <tobynb@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "bluebird": "^2.9.8",
+    "jshint": "^2.6.0",
+    "mocha": "^2.1.0"
+  }
+}
