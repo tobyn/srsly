@@ -3,8 +3,8 @@
 
 "use strict";
 
-var slice = Array.prototype.slice;
-
+var hasSetImmediate = typeof setImmediate !== "undefined",
+    slice = Array.prototype.slice;
 
 var exports = factory;
 
@@ -15,6 +15,8 @@ else if (typeof module !== "undefined" && "exports" in module)
 
 
 function factory(options) {
+  if (!options) options = {};
+
   var style = options.style,
       input = options.input,
       output = options.output;
@@ -55,7 +57,34 @@ function factory(options) {
   else
     output = partial(promiseOut,output);
 
-  var strategy = options.strategy || immediate;
+  var strategy = options.strategy;
+
+  if (!strategy) {
+    var delayOpt = options.delays || options.delay;
+
+    if (delayOpt) {
+      if (delayOpt === "fibonacci")
+        strategy = fibonacciDelays();
+      else if (delayOpt === "exponential")
+        strategy = exponentialDelays();
+      else if (typeof delayOpt === "function")
+        strategy = delayOpt;
+      else if (typeof delayOpt === "number")
+        strategy = specifiedDelays([delayOpt]);
+      else if (delayOpt)
+        strategy = specifiedDelays(delayOpt);
+
+      if (options.maxDelay)
+        strategy = maxDelay(options.maxDelay,strategy);
+
+      strategy = delay(strategy);
+    } else {
+      strategy = immediate;
+    }
+  }
+
+  if (options.tries)
+    strategy = maxTries(options.tries,strategy);
 
   return partial(retry,input,output,strategy);
 }
@@ -145,7 +174,10 @@ function promiseOut(Promise, args, retry) {
 exports.immediate = immediate;
 
 function immediate(tries, err, retry) {
-  retry();
+  if (hasSetImmediate)
+    setImmediate(retry);
+  else
+    setTimeout(retry,0);
 }
 
 
@@ -171,16 +203,9 @@ function maxDelay(max, getDelay) {
 }
 
 
-exports.delays = delays;
+exports.specifiedDelays = specifiedDelays;
 
-function delays(/* delays... */) {
-  return delay(specified(slice.call(arguments)));
-}
-
-
-exports.specified = specified;
-
-function specified(delays) {
+function specifiedDelays(delays) {
   var len = delays.length,
       max = delays[len-1];
 
@@ -198,9 +223,9 @@ function specified(delays) {
 }
 
 
-exports.exponential = exponential;
+exports.exponentialDelays = exponentialDelays;
 
-function exponential(base, exp) {
+function exponentialDelays(base, exp) {
   if (!base && base !== 0)
     base = 1;
 
@@ -213,9 +238,9 @@ function exponential(base, exp) {
 }
 
 
-exports.fibonacci = fibonacci;
+exports.fibonacciDelays = fibonacciDelays;
 
-function fibonacci(start) {
+function fibonacciDelays(start) {
   if (arguments.length === 0)
     start = 1;
 
@@ -251,7 +276,7 @@ function maxTries(n, strategy) {
     else if (strategy)
       strategy(tries,err,retry,fail);
     else
-      retry();
+      immediate(tries,err,retry,fail);
   };
 }
 

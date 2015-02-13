@@ -48,7 +48,7 @@ describe("Adapting node functions to return promises",function() {
   });
 
   it("should reject returned promises using callback errors",function() {
-    var retry = srsly({ output: Promise, strategy: srsly.maxTries(1) });
+    var retry = srsly({ output: Promise, tries: 1 });
 
     return retry(function(arg, callback) {
       callback("failure :(");
@@ -63,7 +63,7 @@ describe("Adapting node functions to return promises",function() {
 
 describe("Adapting promise functions to accept node callbacks",function() {
   it("should pass results to callbacks",function(done) {
-    var retry = srsly({ input: "promise", strategy: srsly.maxTries(1) });
+    var retry = srsly({ input: "promise", tries: 1 });
 
     retry(function(arg) {
       return Promise.resolve(arg.toUpperCase());
@@ -79,7 +79,7 @@ describe("Adapting promise functions to accept node callbacks",function() {
   });
 
   it("should pass rejections to callbacks as errors",function(done) {
-    var retry = srsly({ input: "promise", strategy: srsly.maxTries(1) });
+    var retry = srsly({ input: "promise", tries: 1 });
 
     retry(function(arg) {
       return Promise.reject("failure :(");
@@ -162,22 +162,24 @@ describe("Handling a failed operation",function() {
 
 
 testDelayStrategy("specified",function() {
-  assertDelays(srsly.specified([1,9,2,8,3]),[1,9,2,8,3,3,3,3,3]);
+  assertDelays(srsly.specifiedDelays([1,9,2,8,3]),[1,9,2,8,3,3,3,3,3]);
 });
 
 testDelayStrategy("fibonacci",function() {
-  assertDelays(srsly.fibonacci(0),[0,1,1,2,3,5,8,13]);
+  var fib = srsly.fibonacciDelays;
 
-  assertDelays(srsly.fibonacci(),[1,1,2,3,5,8,13]);
-  assertDelays(srsly.fibonacci(1),[1,1,2,3,5,8,13]);
+  assertDelays(fib(0),[0,1,1,2,3,5,8,13]);
 
-  assertDelays(srsly.fibonacci(2),[2,2,4,6,10,16,26]);
-  assertDelays(srsly.fibonacci(3),[3,3,6,9,15,24,39]);
-  assertDelays(srsly.fibonacci(7),[7,7,14,21,35,56]);
+  assertDelays(fib(),[1,1,2,3,5,8,13]);
+  assertDelays(fib(1),[1,1,2,3,5,8,13]);
+
+  assertDelays(fib(2),[2,2,4,6,10,16,26]);
+  assertDelays(fib(3),[3,3,6,9,15,24,39]);
+  assertDelays(fib(7),[7,7,14,21,35,56]);
 });
 
 testDelayStrategy("exponential",function() {
-  var exp = srsly.exponential;
+  var exp = srsly.exponentialDelays;
 
   assertDelays(exp(),[1,2,4,8,16,32]);
   assertDelays(exp(1),[1,2,4,8,16,32]);
