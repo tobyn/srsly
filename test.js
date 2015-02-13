@@ -8,10 +8,7 @@ var assert = require("assert"),
 
 describe("Handling successful results",function() {
   it("should resolve returned promises",function() {
-    var retry = srsly({
-      style: Promise,
-      delay: srsly.noDelay
-    });
+    var retry = srsly({ style: Promise });
 
     return retry(function(arg) {
       return Promise.resolve(arg.toUpperCase());
@@ -21,10 +18,7 @@ describe("Handling successful results",function() {
   });
 
   it("should call callbacks with null error and the result",function(done) {
-    var retry = srsly({
-      style: "node",
-      delay: srsly.noDelay
-    });
+    var retry = srsly({ style: "node" });
 
     retry(function(arg, callback) {
       callback(null,arg.toUpperCase());
@@ -42,10 +36,7 @@ describe("Handling successful results",function() {
 
 describe("Adapting node functions to return promises",function() {
   it("should resolve returned promises using callback results",function() {
-    var retry = srsly({
-      output: Promise,
-      delay: srsly.noDelay
-    });
+    var retry = srsly({ output: Promise });
 
     return retry(function(arg, callback) {
       callback(null,arg.toUpperCase());
@@ -55,10 +46,7 @@ describe("Adapting node functions to return promises",function() {
   });
 
   it("should reject returned promises using callback errors",function() {
-    var retry = srsly({
-      output: Promise,
-      delay: srsly.max(1,srsly.noDelay)
-    });
+    var retry = srsly({ output: Promise, strategy: srsly.maxTries(1) });
 
     return retry(function(arg, callback) {
       callback("failure :(");
@@ -72,10 +60,7 @@ describe("Adapting node functions to return promises",function() {
 
 describe("Adapting promise functions to accept node callbacks",function() {
   it("should pass results to callbacks",function(done) {
-    var retry = srsly({
-      input: "promise",
-      delay: srsly.max(1,srsly.noDelay)
-    });
+    var retry = srsly({ input: "promise", strategy: srsly.maxTries(1) });
 
     retry(function(arg) {
       return Promise.resolve(arg.toUpperCase());
@@ -91,10 +76,7 @@ describe("Adapting promise functions to accept node callbacks",function() {
   });
 
   it("should pass rejections to callbacks as errors",function(done) {
-    var retry = srsly({
-      input: "promise",
-      delay: srsly.max(1,srsly.noDelay)
-    });
+    var retry = srsly({ input: "promise", strategy: srsly.maxTries(1) });
 
     retry(function(arg) {
       return Promise.reject("failure :(");
@@ -109,16 +91,67 @@ describe("Adapting promise functions to accept node callbacks",function() {
   });
 });
 
-describe("Retrying a failed operation",function() {
-  it("should wait between retries",function() {
+describe("Handling a failed operation",function() {
+  it("should pass the number of failed tries to the strategy",function(done) {
+    var retry = srsly({ strategy: check }),
+        tried = 0;
+
+    function check(tries, err, retry) {
+      try {
+        assert.equal(tries,++tried);
+        if (tries < 5)
+          retry();
+        else
+          done();
+      } catch (e) {
+        done(e);
+      }
+    }
+
+    retry(failOnPurpose);
   });
 
-  it("should yield the expected result on success",function() {
+  it("should pass the last error to the strategy",function(done) {
+    var retry = srsly({ strategy: check });
+
+    function check(tries, err) {
+      try {
+        assert(err instanceof Error);
+        assert.equal(err.message,"This was an expected error.");
+        done();
+      } catch (e) {
+        done(e);
+      }
+    }
+
+    retry(failOnPurpose);
   });
 
-  it("should not exceed the maximum allowed tries",function() {
+  it("should take the path selected by the strategy",function(done) {
+    var retry = srsly({ strategy: check }),
+        start = Date.now();
+
+    function check(tries, err, retry, fail) {
+      if (tries === 1)
+        setTimeout(retry,250);
+      else
+        fail(tries);
+    }
+
+    retry(failOnPurpose,function(lastTry) {
+      try {
+        var duration = Date.now() - start;
+        assert(duration >= 200);
+        assert.equal(lastTry,2);
+        done();
+      } catch (e) {
+        done(e);
+      }
+    });
   });
 
-  it("should pass through the last error if all tries fail",function() {
-  });
+
+  function failOnPurpose(callback) {
+    callback(new Error("This was an expected error."));
+  }
 });

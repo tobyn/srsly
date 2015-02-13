@@ -5,151 +5,249 @@
 var slice = Array.prototype.slice;
 
 
-module.exports = exports = factory;
+var exports = factory;
+
+if (typeof window !== "undefined")
+  window.srsly = exports;
+else if (typeof module !== "undefined" && "exports" in module)
+  module.exports = exports;
+
 
 function factory(options) {
-  var style  = options.style  || "node",
-      input  = options.input  || style,
-      output = options.output || style;
+  var style = options.style,
+      input = options.input,
+      output = options.output;
 
-  if (output === "promise" && typeof Promise === "undefined") {
-    var opt = options.output ? "output" : "style";
+  if (style)
+    validateStyle("style",style);
+  else
+    style = "node";
+
+  if (input)
+    validateStyle("input",input);
+  else
+    input = style;
+
+  if (output)
+    validateStyle("output",output);
+  else
+    output = style;
+
+  if (output === "promise") {
+    if (typeof Promise === "undefined") {
+      var opt = options.output ? "output" : "style";
+      throw new Error(
+        "This JS implementation lacks native promises. In order to " +
+        "generate promise output, pass an ES6-compliant promise constructor " +
+        "(Bluebird is a good choice) as the '" + opt + "' option.");
+    }
+
+    output = Promise;
+  }
+
+  if (input === "node")
+    input = nodeIn;
+  else
+    input = promiseIn;
+
+  if (output === "node")
+    output = nodeOut;
+  else
+    output = partial(promiseOut,output);
+
+  var strategy = options.strategy || immediate;
+
+  return partial(retry,input,output,strategy);
+}
+
+function validateStyle(opt, value) {
+  if (value !== "node" && value !== "promise" && typeof value !== "function")
     throw new Error(
-      "This JS implementation lacks native promises. In order to " +
-      "generate promise output, pass an ES6-compliant promise constructor " +
-      "(Bluebird is a good choice) as the '" + opt + "' option.");
-  }
-
-  var fn;
-  if (input === "promise" || typeof input === "function")
-    fn = partial(promiseInputAdapter,options.delay);
-  else
-    fn = partial(srsly,options.delay);
-
-  if (typeof output === "function")
-    return nodeToPromise(fn,output);
-  else
-    return fn;
-}
-
-function promiseInputAdapter(getDelay, fn) {
-  var args = slice.call(arguments,2);
-  args.unshift(promiseToNode(fn));
-  args.unshift(getDelay);
-  return srsly.apply(null,args);
+      "Invalid '" + opt + "' option. Acceptable values are 'node', " +
+      "'promise', or an ES6-compliant Promise constructor.");
 }
 
 
-exports.srsly = srsly;
+function retry(input, output, strategy, fn/*, [args...] */) {
+  var args = slice.call(arguments,4);
 
-function srsly(getDelay, fn) {
-  var tries = 0,
-      finished = false,
-      args = slice.call(arguments,2),
-      callback = args.pop();
+  return output(args,function(resolve, reject) {
+    var tries = 0,
+        finished = false;
 
-  if (typeof callback !== "function") {
-    args.push(callback);
-    callback = noop;
-  }
+    attempt();
 
-  args.push(function(err, result) {
-    if (err)
-      fail(err);
-    else
-      finish(err,result);
-  });
-
-  attempt();
-
-  function attempt() {
-    tries++;
-
-    try {
-      fn.apply(null,args);
-    } catch (err) {
-      fail(err);
-    }
-  }
-
-  function fail(err) {
-    try {
-      var delay = getDelay(tries,err);
-      setTimeout(attempt,delay);
-    } catch (e) {
-      finish(e);
-    }
-  }
-
-  function finish(err, result) {
-    if (finished) return;
-    finished = true;
-    callback(err,result);
-  }
-}
-
-
-exports.promiseToNode = promiseToNode;
-
-function promiseToNode(fn) {
-  return function() {
-    var args = slice.call(arguments),
-        callback = args.pop();
-
-    if (typeof callback !== "function") {
-      args.push(callback);
-      callback = noop;
-    }
-
-    fn.apply(null,args).then(partial(callback,null),callback);
-  };
-}
-
-
-exports.nodeToPromise = nodeToPromise;
-
-function nodeToPromise(fn, Promise) {
-  return function() {
-    var args = slice.call(arguments);
-
-    return new Promise(function(resolve, reject) {
-      args.push(function(err, result) {
-        if (err)
-          reject(err);
-        else
-          resolve(result);
-      });
+    function attempt() {
+      tries++;
 
       try {
-        fn.apply(null,args);
+        input(fn,args,succeed,failAttempt);
       } catch (e) {
-        reject(e);
+        failAttempt(e);
       }
-    });
-  };
+    }
+
+    function succeed(result) {
+      if (finished) return;
+      finished = true;
+      resolve(result);
+    }
+
+    function fail(err) {
+      if (finished) return;
+      finished = true;
+      reject(err);
+    }
+
+    function failAttempt(err) {
+      try {
+        strategy(tries,err,attempt,fail);
+      } catch (e) {
+        fail(e);
+      }
+    }
+  });
 }
 
 
-exports.max = max;
-
-function max(n, realDelay) {
-  return function(tries, err) {
-    if (tries >= n)
-      throw err;
+function nodeIn(fn, args, resolve, reject) {
+  args.push(function(err, result) {
+    if (err)
+      reject(err);
     else
-      return realDelay(tries,err);
+      resolve(result);
+  });
+
+  fn.apply(null,args);
+}
+
+function promiseIn(fn, args, resolve, reject) {
+  fn.apply(null,args).then(resolve,reject);
+}
+
+
+function nodeOut(args, retry) {
+  var callback = args[args.length-1];
+
+  if (typeof callback === "function")
+    args.pop();
+  else
+    callback = noop;
+
+  retry(partial(callback,null),callback);
+}
+
+function promiseOut(Promise, args, retry) {
+  return new Promise(retry);
+}
+
+
+exports.immediate = immediate;
+
+function immediate(tries, err, retry) {
+  retry();
+}
+
+
+exports.delay = delay;
+
+function delay(getDelay) {
+  return function(tries, err, retry) {
+    setTimeout(retry,getDelay(tries) * 1000);
   };
 }
 
 
-exports.noDelay = noDelay;
+exports.maxDelay = maxDelay;
 
-function noDelay() {
-  return 0;
+function maxDelay(max, getDelay) {
+  return function(tries) {
+    var d = getDelay(tries);
+    if (d > max)
+      return max;
+    else
+      return d;
+  };
 }
 
 
-exports.partial = partial;
+exports.delays = delays;
+
+function delays(/* delays... */) {
+  var ds = slice.call(arguments),
+      len = ds.length,
+      max = ds[len-1];
+
+  return delay(function(tries) {
+    var index = tries - 1,
+        seconds;
+
+    if (index >= len)
+      seconds = max;
+    else
+      seconds = ds[index];
+
+    return seconds;
+  });
+}
+
+
+exports.exponential = exponential;
+
+function exponential(base) {
+  if (!base && base !== 0)
+    base = 1;
+
+  return function(tries) {
+    return base * Math.pow(2,tries-1);
+  };
+}
+
+
+exports.fibonacci = fibonacci;
+
+function fibonacci(start) {
+  if (arguments.length === 0)
+    start = 1;
+
+  var n_1,
+      n_2 = start;
+
+  if (start === 0)
+    n_1 = 1;
+  else
+    n_1 = start;
+
+  return function(tries) {
+    if (tries === 1)
+      return n_2;
+    else if (tries === 2)
+      return n_1;
+
+    var temp = n_2;
+    n_2 = n_1;
+    n_1 = n_2 + temp;
+
+    return n_1;
+  };
+}
+
+
+exports.maxTries = maxTries;
+
+function maxTries(n, strategy) {
+  return function(tries, err, retry, fail) {
+    if (tries >= n)
+      fail(err);
+    else if (strategy)
+      strategy(tries,err,retry,fail);
+    else
+      retry();
+  };
+}
+
+
+function noop() { }
 
 function partial(fn) {
   var args = slice.call(arguments,1);
@@ -158,8 +256,5 @@ function partial(fn) {
     return fn.apply(this,args.concat(slice.call(arguments)));
   };
 }
-
-
-function noop() { }
 
 })();
