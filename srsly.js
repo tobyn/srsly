@@ -1,9 +1,8 @@
 (function() {
-/* @flow */
 
 "use strict";
 
-var hasSetImmediate = typeof setImmediate !== "undefined",
+var tick = typeof setImmediate === "function" ? setImmediate : setTimeout,
     slice = Array.prototype.slice;
 
 var exports = factory;
@@ -97,6 +96,8 @@ function validateStyle(opt, value) {
 }
 
 
+exports.retry = retry;
+
 function retry(input, output, strategy, fn/*, [args...] */) {
   var args = slice.call(arguments,4);
 
@@ -174,10 +175,21 @@ function promiseOut(Promise, args, retry) {
 exports.immediate = immediate;
 
 function immediate(tries, err, retry) {
-  if (hasSetImmediate)
-    setImmediate(retry);
-  else
-    setTimeout(retry,0);
+  tick(retry,0);
+}
+
+
+exports.maxTries = maxTries;
+
+function maxTries(n, strategy) {
+  return function(tries, err, retry, fail) {
+    if (tries >= n)
+      fail(err);
+    else if (strategy)
+      strategy(tries,err,retry,fail);
+    else
+      immediate(tries,err,retry,fail);
+  };
 }
 
 
@@ -225,15 +237,15 @@ function specifiedDelays(delays) {
 
 exports.exponentialDelays = exponentialDelays;
 
-function exponentialDelays(base, exp) {
+function exponentialDelays(base, multiplier) {
   if (!base && base !== 0)
     base = 1;
 
-  if (!exp && exp !== 0)
-    exp = 2;
+  if (!multiplier && multiplier !== 0)
+    multiplier = 2;
 
   return function(tries) {
-    return base * Math.max(Math.pow(exp,tries-1),1);
+    return base * Math.max(Math.pow(multiplier,tries-1),1);
   };
 }
 
@@ -263,20 +275,6 @@ function fibonacciDelays(start) {
     n_1 = n_2 + temp;
 
     return n_1;
-  };
-}
-
-
-exports.maxTries = maxTries;
-
-function maxTries(n, strategy) {
-  return function(tries, err, retry, fail) {
-    if (tries >= n)
-      fail(err);
-    else if (strategy)
-      strategy(tries,err,retry,fail);
-    else
-      immediate(tries,err,retry,fail);
   };
 }
 
