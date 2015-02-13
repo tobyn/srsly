@@ -1,4 +1,5 @@
 (function() {
+/* @flow */
 
 "use strict";
 
@@ -34,13 +35,12 @@ function factory(options) {
     output = style;
 
   if (output === "promise") {
-    if (typeof Promise === "undefined") {
-      var opt = options.output ? "output" : "style";
+    if (typeof Promise === "undefined")
       throw new Error(
         "This JS implementation lacks native promises. In order to " +
-        "generate promise output, pass an ES6-compliant promise constructor " +
-        "(Bluebird is a good choice) as the '" + opt + "' option.");
-    }
+        "generate promise output, pass an ES6-compliant Promise " +
+        "constructor (Bluebird is a good choice) as the '" +
+        (options.output ? "output" : "style") + "' option.");
 
     output = Promise;
   }
@@ -101,7 +101,7 @@ function retry(input, output, strategy, fn/*, [args...] */) {
 
     function failAttempt(err) {
       try {
-        strategy(tries,err,attempt,fail);
+        strategy(tries,err,once(attempt),fail);
       } catch (e) {
         fail(e);
       }
@@ -174,32 +174,41 @@ function maxDelay(max, getDelay) {
 exports.delays = delays;
 
 function delays(/* delays... */) {
-  var ds = slice.call(arguments),
-      len = ds.length,
-      max = ds[len-1];
+  return delay(specified(slice.call(arguments)));
+}
 
-  return delay(function(tries) {
+
+exports.specified = specified;
+
+function specified(delays) {
+  var len = delays.length,
+      max = delays[len-1];
+
+  return function(tries) {
     var index = tries - 1,
         seconds;
 
     if (index >= len)
       seconds = max;
     else
-      seconds = ds[index];
+      seconds = delays[index];
 
     return seconds;
-  });
+  };
 }
 
 
 exports.exponential = exponential;
 
-function exponential(base) {
+function exponential(base, exp) {
   if (!base && base !== 0)
     base = 1;
 
+  if (!exp && exp !== 0)
+    exp = 2;
+
   return function(tries) {
-    return base * Math.pow(2,tries-1);
+    return base * Math.max(Math.pow(exp,tries-1),1);
   };
 }
 
@@ -248,6 +257,16 @@ function maxTries(n, strategy) {
 
 
 function noop() { }
+
+function once(fn) {
+  var called = false;
+
+  return function() {
+    if (called) return;
+    called = true;
+    return fn.apply(this,arguments);
+  };
+}
 
 function partial(fn) {
   var args = slice.call(arguments,1);

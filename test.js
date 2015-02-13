@@ -6,6 +6,7 @@ var assert = require("assert"),
     Promise = require("bluebird"),
     srsly = require("./");
 
+
 describe("Handling successful results",function() {
   it("should resolve returned promises",function() {
     var retry = srsly({ style: Promise });
@@ -34,6 +35,7 @@ describe("Handling successful results",function() {
   });
 });
 
+
 describe("Adapting node functions to return promises",function() {
   it("should resolve returned promises using callback results",function() {
     var retry = srsly({ output: Promise });
@@ -57,6 +59,7 @@ describe("Adapting node functions to return promises",function() {
     });
   });
 });
+
 
 describe("Adapting promise functions to accept node callbacks",function() {
   it("should pass results to callbacks",function(done) {
@@ -90,6 +93,7 @@ describe("Adapting promise functions to accept node callbacks",function() {
     });
   });
 });
+
 
 describe("Handling a failed operation",function() {
   it("should pass the number of failed tries to the strategy",function(done) {
@@ -155,3 +159,54 @@ describe("Handling a failed operation",function() {
     callback(new Error("This was an expected error."));
   }
 });
+
+
+testDelayStrategy("specified",function() {
+  assertDelays(srsly.specified([1,9,2,8,3]),[1,9,2,8,3,3,3,3,3]);
+});
+
+testDelayStrategy("fibonacci",function() {
+  assertDelays(srsly.fibonacci(0),[0,1,1,2,3,5,8,13]);
+
+  assertDelays(srsly.fibonacci(),[1,1,2,3,5,8,13]);
+  assertDelays(srsly.fibonacci(1),[1,1,2,3,5,8,13]);
+
+  assertDelays(srsly.fibonacci(2),[2,2,4,6,10,16,26]);
+  assertDelays(srsly.fibonacci(3),[3,3,6,9,15,24,39]);
+  assertDelays(srsly.fibonacci(7),[7,7,14,21,35,56]);
+});
+
+testDelayStrategy("exponential",function() {
+  var exp = srsly.exponential;
+
+  assertDelays(exp(),[1,2,4,8,16,32]);
+  assertDelays(exp(1),[1,2,4,8,16,32]);
+
+  assertDelays(exp(2),[2,4,8,16,32]);
+  assertDelays(exp(3),[3,6,12,24,48]);
+  assertDelays(exp(3,3),[3,9,27,81,243]);
+
+  assertDelays(exp(0),[0,0,0,0,0]);
+  assertDelays(exp(0,2),[0,0,0,0,0]);
+  assertDelays(exp(0,5),[0,0,0,0,0]);
+
+  assertDelays(exp(0,0),[0,0,0,0,0]);
+  assertDelays(exp(1,0),[1,1,1,1,1]);
+  assertDelays(exp(5,0),[5,5,5,5,5]);
+});
+
+
+function testDelayStrategy(name, test) {
+  describe("The " + name + " delay strategy",function() {
+    it("should yield the correct sequence of delays",test);
+  });
+}
+
+function assertDelays(getDelay, expected) {
+  var actual = [];
+
+  for (var i = 1, len = expected.length; i <= len; i++)
+    actual.push(getDelay(i));
+
+  assert.deepEqual(expected,actual);
+}
