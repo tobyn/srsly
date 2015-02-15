@@ -2,8 +2,14 @@
 
 "use strict";
 
-var tick = typeof setImmediate === "function" ? setImmediate : setTimeout,
-    slice = Array.prototype.slice;
+var slice = Array.prototype.slice;
+
+var runNext;
+if (typeof setImmediate === "function")
+  runNext = setImmediate;
+else
+  runNext = setTimeout;
+
 
 var exports = factory;
 
@@ -72,13 +78,16 @@ function factory(options) {
         strategy = specifiedDelays([delayOpt]);
       else if (delayOpt)
         strategy = specifiedDelays(delayOpt);
+      else
+        strategy = specifiedDelays([0]);
+
+      if (options.fuzz)
+        strategy = randomDelays(options.fuzz,strategy);
 
       if (options.maxDelay)
         strategy = maxDelay(options.maxDelay,strategy);
 
       strategy = delay(strategy);
-    } else {
-      strategy = immediate;
     }
   }
 
@@ -172,13 +181,6 @@ function promiseOut(Promise, args, retry) {
 }
 
 
-exports.immediate = immediate;
-
-function immediate(tries, err, retry) {
-  tick(retry,0);
-}
-
-
 exports.maxTries = maxTries;
 
 function maxTries(n, strategy) {
@@ -188,7 +190,7 @@ function maxTries(n, strategy) {
     else if (strategy)
       strategy(tries,err,retry,fail);
     else
-      immediate(tries,err,retry,fail);
+      runNext(retry,0);
   };
 }
 
@@ -197,7 +199,11 @@ exports.delay = delay;
 
 function delay(getDelay) {
   return function(tries, err, retry) {
-    setTimeout(retry,getDelay(tries) * 1000);
+    var delay = getDelay(tries);
+    if (delay <= 0)
+      runNext(retry,0);
+    else
+      setTimeout(retry,delay * 1000);
   };
 }
 
@@ -275,6 +281,38 @@ function fibonacciDelays(start) {
     n_1 = n_2 + temp;
 
     return n_1;
+  };
+}
+
+
+exports.randomDelays = randomDelays;
+
+function randomDelays(range, getDelay) {
+  var min, interval;
+
+  if (typeof range === "undefined") {
+    range = 1;
+  } else if (typeof range === "function" && !getDelay) {
+    getDelay = range;
+    range = 1;
+  }
+
+  if (typeof range === "object" && range.length) {
+    min = range[0];
+    interval = range[1] - min;
+  } else {
+    min = 0;
+    interval = range;
+  }
+
+  return function(tries) {
+    var base;
+    if (getDelay)
+      base = getDelay(tries);
+    else
+      base = 0;
+
+    return base + min + (interval * Math.random());
   };
 }
 

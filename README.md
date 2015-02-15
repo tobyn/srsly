@@ -13,18 +13,14 @@ they succeed.
 * Equal support for functions that accept node-style callbacks and
   functions that return promises, with conversion between the two.
 * No dependencies. Unless you want promise output and your JS
-  implementation doesn't have native support. Then you can provide
-  whatever ES6-compatible implementation you like (the tests use
+  implementation doesn't have native support. In that case you can
+  provide whatever ES6-compatible implementation you like (the tests use
   Bluebird).
 
 
 ## Install
 
-Pick one:
-
-* `npm install srsly`
-* `bower install srsly`
-* Download srsly.js
+You can either `npm install srsly`, or just download a copy of srsly.js.
 
 In node, `require("srsly")` returns a factory function. This function is
 exposed in the browser as the `srsly` global.
@@ -66,6 +62,7 @@ var fs = require("fs");
 var retry = require("srsly")({
   output: require("bluebird"),
   delay: "exponential",
+  fuzz: 2,
   maxDelay: 10, // seconds
   tries: 10
 });
@@ -121,7 +118,8 @@ Creates a new retry function. The following options are valid:
 
 * `delay` *String | Number | Array | Function* (Default: none)
 
-  This option is ignored if the `strategy` option is provided.
+  Wait before each retry. This option is ignored if the `strategy`
+  option is provided.
 
   If the value is `"exponential"`, the initial retry is delayed one
   second, and subsequent retries are delayed by twice as long as the
@@ -143,6 +141,18 @@ Creates a new retry function. The following options are valid:
   If the value is a function, it is a delay strategy. See [**Delay
   Strategies**](#delay-strategies).
 
+* `fuzz` *Number | Array* (Default: none)
+
+  Delay each retry by a random amount. If `fuzz` is a number, the delay
+  is `[0,value)` seconds. If `fuzz` is an array, the first two elements
+  are interpreted as `[minimum, maximum]`, and the delay is between
+  `[minimum,maxmimum)`.
+
+  This option is ignored if the `strategy` option is provided. If the
+  `delay` option is provided, any random delay is *in addition to* that
+  delay.  If the `maxDelay` option is provided, the combined delay is
+  subject to the limit.
+
 * `maxDelay` *Number* (Default: none)
 
   The maximum delay between retries in seconds. This option is ignored
@@ -159,11 +169,6 @@ functions that take four arguments: the number of tries so far, the last
 error received, a function that will trigger an immediate retry, and
 another function that will abort retrying with a given error.
 
-### `srsly.immediate: Function`
-
-The immediate strategy uses `setImmediate` (if available) or
-`setTimeout` to immediately retry.
-
 ### `srsly.delay(getDelay: Function): Function`
 
 Returns a strategy that waits before retrying. `getDelay` is a [**Delay
@@ -173,7 +178,7 @@ Strategy**](#delay-strategies) function.
 
 Returns a strategy that terminates retrying if `n` tries have failed. If
 fewer than `n` tries have failed, `maxTries` delegates to `strategy` if
-provided, otherwise it uses `immediate`.
+provided, otherwise it retries immediately.
 
 ## <a name="delay-strategies"></a>Delay Strategies
 
@@ -199,3 +204,17 @@ Returns a delay strategy that yields the numbers from the Fibonacci
 sequence. If `start` is provided and greater than 1, it is used as the
 initial element of a new sequence constructed by the same process as the
 Fibonacci sequence.
+
+### `srsly.randomDelays(range: Number | Array = 1, [getDelay: Function]): Function`
+
+Returns a delay strategy that yields a random delay. If `range` is a
+number, the value returned will be between `[0,value)`. If `range` is an
+array, the first two elements are interpreted as `[minimum, maximum]`,
+and the resulting value is in the range `[minimum,maximum)`.
+
+If `getDelay` exists, any delay it yields is added to the random delay.
+
+### `srsly.maxDelay(max: Number, getDelay: Function): Function`
+
+Returns a delay strategy that yields delays provided by `getDelay`. If
+any of these delays are larger than `max`, `max` is returned instead.

@@ -161,6 +161,33 @@ describe("Handling a failed operation",function() {
 });
 
 
+describe("The random delay strategy",function() {
+  it("should yield values within the acceptable range",function() {
+    testDelays(srsly.randomDelays(10),0,10);
+    testDelays(srsly.randomDelays([5,20]),5,20);
+    testDelays(srsly.randomDelays(),0,1);
+
+    function testDelays(getDelay, min, max) {
+      for (var i = 0; i < 100; i++) {
+        var delay = getDelay(i);
+        assert(delay >= min && delay < max,
+               delay + " >= " + min + " && " + delay + " < " + max);
+      }
+    }
+  });
+
+  it("should add its output to any other strategy given",function() {
+    var delay = srsly.randomDelays(underlyingStrategy)(1);
+
+    assert(delay >= 31337 && delay < 31338);
+
+    function underlyingStrategy() {
+      return 31337;
+    }
+  });
+});
+
+
 testDelayStrategy("specified",function() {
   assertDelays(srsly.specifiedDelays([1,9,2,8,3]),[1,9,2,8,3,3,3,3,3]);
 });
