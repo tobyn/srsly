@@ -250,38 +250,36 @@ function exponentialDelays(base, multiplier) {
   if (!multiplier && multiplier !== 0)
     multiplier = 2;
 
-  return function(tries) {
-    return base * Math.max(Math.pow(multiplier,tries-1),1);
-  };
+  return partial(exponentialDelay,base,multiplier);
+}
+
+function exponentialDelay(base, multiplier, tries) {
+  return base * Math.max(Math.pow(multiplier,tries-1),1);
 }
 
 
 exports.fibonacciDelays = fibonacciDelays;
 
 function fibonacciDelays(start) {
-  if (arguments.length === 0)
+  if (!start && start !== 0)
     start = 1;
 
-  var n_1,
-      n_2 = start;
+  return partial(fibonacciDelay,start);
+}
 
-  if (start === 0)
-    n_1 = 1;
-  else
-    n_1 = start;
+function fibonacciDelay(start, tries) {
+  var a = start,
+      b = start || 1,
+      temp;
 
-  return function(tries) {
-    if (tries === 1)
-      return n_2;
-    else if (tries === 2)
-      return n_1;
+  while (tries > 1) {
+    temp = a;
+    a = b;
+    b += temp;
+    tries--;
+  }
 
-    var temp = n_2;
-    n_2 = n_1;
-    n_1 = n_2 + temp;
-
-    return n_1;
-  };
+  return a;
 }
 
 
