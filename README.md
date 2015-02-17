@@ -12,7 +12,7 @@ they succeed.
   cover most common use cases and make building more complex ones easier.
 * Equal support for functions that accept node-style callbacks and
   functions that return promises, with conversion between the two.
-* No dependencies. Unless you want promise output and your JS
+* No dependencies unless you want promise output and your JS
   implementation doesn't have native support. In that case you can
   provide whatever ES6-compatible implementation you like (the tests use
   Bluebird).

@@ -132,8 +132,7 @@ describe("Handling a failed operation",function() {
   });
 
   it("should take the path selected by the strategy",function(done) {
-    var retry = srsly({ strategy: check }),
-        start = Date.now();
+    var retry = srsly({ strategy: check });
 
     function check(tries, err, retry, fail) {
       if (tries === 1)
@@ -142,21 +141,120 @@ describe("Handling a failed operation",function() {
         fail(tries);
     }
 
-    retry(failOnPurpose,function(lastTry) {
-      try {
-        var duration = Date.now() - start;
-        assert(duration >= 200);
-        assert.equal(lastTry,2);
-        done();
-      } catch (e) {
-        done(e);
-      }
+    trackTime(function(duration) {
+      retry(failOnPurpose,function(lastTry) {
+        try {
+          assert(duration() >= 200);
+          assert.equal(lastTry,2);
+          done();
+        } catch (e) {
+          done(e);
+        }
+      });
     });
   });
 
 
   function failOnPurpose(callback) {
     callback(new Error("This was an expected error."));
+  }
+});
+
+
+describe("Setting a maximum number of tries",function() {
+  it("should retry up to the max number of tries",function(done) {
+    srsly.maxTries(2)(1,new Error(),retry,fail);
+
+    function retry() {
+      done();
+    }
+
+    function fail() {
+      done(new Error("Strategy tried to fail unexpectedly"));
+    }
+  });
+
+  it("should fail on any subsequent try",function(done) {
+    srsly.maxTries(2,strategy)(2,new Error(),retry,fail);
+
+    function strategy() {
+      done(new Error("Strategy tried to delegate unexpectedly"));
+    }
+
+    function retry() {
+      done(new Error("Strategy tried to retry unexpectedly"));
+    }
+
+    function fail() {
+      done();
+    }
+  });
+
+  it("should delegate to another strategy",function(done) {
+    var called = false,
+        expectedError = new Error();
+
+    srsly.maxTries(2,strategy)(1,expectedError,retry,fail);
+
+    function strategy(tries, err, retry, fail) {
+      called = true;
+      assert.equal(tries,1);
+      assert.strictEqual(err,expectedError);
+      retry();
+    }
+
+    function retry() {
+      assert(called);
+      done();
+    }
+
+    function fail() {
+      done(new Error("Strategy tried to fail unexpectedly"));
+    }
+  });
+});
+
+
+describe("Setting a delay between retries",function() {
+  it("should retry after the desired number of seconds",function(done) {
+    trackTime(function(duration) {
+      srsly.delay(getDelay)(1,new Error(),retry,fail);
+
+      function getDelay() {
+        return 0.25;
+      }
+
+      function retry() {
+        try {
+          assert(duration() >= 200);
+          done();
+        } catch (e) {
+          done(e);
+        }
+      }
+
+      function fail() {
+        done(new Error("Strategy tried to fail unexpectedly"));
+      }
+    });
+  });
+});
+
+
+describe("Setting a maximum delay",function() {
+  it("should yield delays less than the maximum unchanged",function() {
+    var max = srsly.maxDelay(3,getDelay);
+    assert.equal(max(1),2);
+  });
+
+  it("should yield the max delay otherwise",function() {
+    var max = srsly.maxDelay(1,getDelay);
+    assert.equal(max(1),1);
+  });
+
+
+  function getDelay() {
+    return 2;
   }
 });
 
@@ -238,4 +336,14 @@ function assertDelays(getDelay, expected) {
     actual.push(getDelay(i));
 
   assert.deepEqual(expected,actual);
+}
+
+function trackTime(f) {
+  var start = Date.now();
+
+  f(duration);
+
+  function duration() {
+    return Date.now() - start;
+  }
 }

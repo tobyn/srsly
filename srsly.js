@@ -67,28 +67,26 @@ function factory(options) {
   if (!strategy) {
     var delayOpt = options.delays || options.delay;
 
-    if (delayOpt) {
-      if (delayOpt === "fibonacci")
-        strategy = fibonacciDelays();
-      else if (delayOpt === "exponential")
-        strategy = exponentialDelays();
-      else if (typeof delayOpt === "function")
-        strategy = delayOpt;
-      else if (typeof delayOpt === "number")
-        strategy = specifiedDelays([delayOpt]);
-      else if (delayOpt)
-        strategy = specifiedDelays(delayOpt);
-      else
-        strategy = specifiedDelays([0]);
+    if (delayOpt === "fibonacci")
+      strategy = fibonacciDelays();
+    else if (delayOpt === "exponential")
+      strategy = exponentialDelays();
+    else if (typeof delayOpt === "function")
+      strategy = delayOpt;
+    else if (typeof delayOpt === "number")
+      strategy = specifiedDelays([delayOpt]);
+    else if (delayOpt)
+      strategy = specifiedDelays(delayOpt);
+    else
+      strategy = specifiedDelays([0]);
 
-      if (options.fuzz)
-        strategy = randomDelays(options.fuzz,strategy);
+    if (options.fuzz)
+      strategy = randomDelays(options.fuzz,strategy);
 
-      if (options.maxDelay)
-        strategy = maxDelay(options.maxDelay,strategy);
+    if (options.maxDelay)
+      strategy = maxDelay(options.maxDelay,strategy);
 
-      strategy = delay(strategy);
-    }
+    strategy = delay(strategy);
   }
 
   if (options.tries)
