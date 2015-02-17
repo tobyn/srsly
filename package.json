@@ -1,7 +1,7 @@
 {
   "name": "srsly",
   "version": "1.0.0",
-  "description": "Yet another async function retry",
+  "description": "Yet another async retry function",
   "main": "srsly.js",
   "scripts": {
     "test": "mocha"
